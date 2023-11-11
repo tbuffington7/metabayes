@@ -18,5 +18,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         'numpy',
+        'tqdm',
+        'matplotlib'
     ]
 )

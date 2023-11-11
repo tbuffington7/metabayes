@@ -1,1 +1,1 @@
-from gibbs_sampler import GibbsSampler
+from metabayes.gibbs_sampler import GibbsSampler

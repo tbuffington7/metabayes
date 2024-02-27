@@ -13,13 +13,25 @@ def _plot_percentage(plotting_method):
 
 
 class Prior:
-    def __init__(self, alpha: float = .1, beta: float = 0.00001, epsilon: float = 400):
+    def __init__(self, alpha: float = .1, beta: float = 0.00001, epsilon: float = 1600):
+        """
+        Initializes the Prior class
+
+        Parameters
+        ----------
+        alpha: float
+            The alpha parameter in the inverse gamma prior over the effect variance
+        beta: float
+            The alpha parameter in the inverse gamma prior over the effect variance
+        epsilon: float
+            The prior precision for the effect
+        """
         self.alpha = alpha
         self.beta = beta
         self.epsilon = epsilon
 
     @_plot_percentage
-    def plot_meta_effect_prior(self, num_draws=10 ** 5, lower=-.2, upper=0.2, num_bins=100, **plot_params):
+    def plot_meta_effect_prior(self, num_draws=10 ** 5, lower=-.1, upper=0.1, num_bins=100, **plot_params):
         draws = np.random.normal(0, self.epsilon ** -.5, size=num_draws)
         plt.hist(draws, bins=np.linspace(lower, upper, num_bins), **plot_params)
         plt.xlabel("Meta Relative Lift %")

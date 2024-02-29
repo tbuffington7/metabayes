@@ -25,6 +25,7 @@ gs = GibbsSampler.from_binary_counts(num_trials,
                                      treatment_successes,
                                      prior)
 gs.run_model()
+results = gs.get_posterior_samples()
 ```
 
 Note that the model currently only supports binomial metircs (i.e. conversion rate).

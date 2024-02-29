@@ -74,7 +74,7 @@ where $\mu$ is the average lift across all experiments and $\tau$ is the precisi
 
 We could stop here if we wanted as we now have a fully specified Bayesian model with a prior and a likelihood and leave it to users to choose sensible values for $\mu$ and $\tau$. However, given that this a meta analysis, we can instead construct a model that learns (in a Bayesian sense) $\mu$ and $\tau$ from the data. This is what makes the model _hierarchical_-- the fact that we define priors on parameters that are used in priors. In other words, we have a hierarchy of priors. Now let's define those "top-level" priors. Again, it is convenient to use a normal prior for $\mu$:
 
-$$\mu \sim N(0, \frac{1}{\epsilon})$$.
+$$\mu \sim N(0, \frac{1}{\epsilon})$$
 
 We use a mean of 0 to reflect agnosticism about the direction of the meta-lift. The precision of this prior, $\epsilon$ is a user-specified parameter, but by default, it is set to 1600. This corresponds to a standard deviation of 2.5%, which means that we are 95% confident a-priori that the true meta effect is between -5% and 5% (+/- two standard deviations). This loosely reflects the range of true lifts observed in typical A/B tests. Users are encouraged to try different values of $\epsilon$, but I expect that the results will not be very sensitive to this parameter assuming that a sufficient number of tests are included in the analysis. At some point, I hope to do a more thorough sensitivity analysis.
 
@@ -101,12 +101,6 @@ We again use the normal-normal conjugate pair to update $\mu$:
 
 $$
 \mu | \theta\_{i}, \tau \sim N(\frac{\tau\sum\theta\_{i}}{k\tau + \epsilon}, k\tau + \epsilon)
-$$
-
-Finally, we use the normal-gamma conjugate pair to update $\tau$:
-
-$$
-\tau | \mu, \theta\_{i} \sim Gamma(\alpha+\frac{k}{2}) \beta + \frac{\sum(\theta\_{i} - \mu)^2}{2}
 $$
 
 Finally, we use the normal-gamma conjugate pair to update $\tau$:

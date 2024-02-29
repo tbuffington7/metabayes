@@ -13,8 +13,9 @@ class GibbsSampler:
                  treatment_means: ndarray,
                  control_mean_variances: ndarray,
                  treatment_mean_variances: ndarray,
-                 prior,
-                 num_iterations: int = 10000) -> None:
+                 prior: Prior,
+                 num_iterations: int = 10000,
+                 burn: int = 100) -> None:
         """
         Initialize the GibbsSampler with experiment data and parameters.
 
@@ -32,18 +33,21 @@ class GibbsSampler:
             The prior object
         num_iterations : int, optional
             The number of iterations for the Gibbs sampling, default is 1000.
+        burn : int, optional
+            The number of initial iterations to burn before the sampler stabilizes, default is 100.
         """
         self._validate_inputs(control_means, treatment_means, control_mean_variances, treatment_mean_variances)
         self.prior = prior
         self.parameters = self._build_data_dict(control_means, treatment_means, control_mean_variances,
                                                 treatment_mean_variances)
-        self.simulation_settings = self._build_simulation_setting_dict(num_iterations)
-        self.traces = self._initialize_traces()
+        self.simulation_settings = self._build_simulation_setting_dict(num_iterations, burn)
+
+        self._raw_traces = self._initialize_traces()
 
     @classmethod
     def from_binary_counts(cls, control_sample_size: int, control_successes: int,
                            treatment_sample_size: int, treatment_successes: int,
-                           prior: float, num_iterations: int = 10000) -> 'GibbsSampler':
+                           prior: Prior, num_iterations: int = 10000) -> 'GibbsSampler':
         """
         Class method to create a GibbsSampler instance from binary count data.
 
@@ -57,7 +61,7 @@ class GibbsSampler:
             The size of the treatment sample.
         treatment_successes : int
             The number of successes in the treatment sample.
-        prior : float
+        prior : Prior
             The prior value for the GibbsSampler.
         num_iterations : int, optional
             The number of iterations for the Gibbs sampler, default is 10000.
@@ -99,8 +103,9 @@ class GibbsSampler:
         return data
 
     @staticmethod
-    def _build_simulation_setting_dict(num_iterations: int) -> Dict[str, int]:
-        simulation_settings = {'num_iterations': num_iterations}
+    def _build_simulation_setting_dict(num_iterations: int, burn: int) -> Dict[str, int]:
+        simulation_settings = {'num_iterations': num_iterations,
+                               'burn': burn}
         return simulation_settings
 
     @staticmethod
@@ -128,31 +133,31 @@ class GibbsSampler:
     def _initialize_traces(self) -> Dict[str, ndarray]:
         traces = {
             'tau': np.zeros(self.simulation_settings['num_iterations']),
-            'nu': np.zeros(self.simulation_settings['num_iterations']),
+            'mu': np.zeros(self.simulation_settings['num_iterations']),
             'theta': np.zeros((self.simulation_settings['num_iterations'], self.parameters['num_experiments']))
         }
 
         traces['tau'][0] = np.random.gamma(self.prior.alpha, scale=1 / self.prior.beta)
-        traces['nu'][0] = np.random.normal(0, np.sqrt(1 / self.prior.epsilon))
+        traces['mu'][0] = np.random.normal(0, np.sqrt(1 / self.prior.epsilon))
 
-        traces['theta'][0, :] = np.random.normal(traces['nu'][0],
+        traces['theta'][0, :] = np.random.normal(traces['mu'][0],
                                                  np.sqrt(1 / traces['tau'][0]), size=self.parameters['num_experiments'])
         return traces
 
     def _update_theta(self, iteration_num: int) -> None:
-        precision = self.parameters['omega'] + self.traces['tau'][iteration_num - 1]
+        precision = self.parameters['omega'] + self._raw_traces['tau'][iteration_num - 1]
         mean = (self.parameters['omega'] * self.parameters['percent_deltas'] +
-                self.traces['tau'][iteration_num - 1] * self.traces['nu'][iteration_num - 1]) / precision
-        self.traces['theta'][iteration_num] = np.random.normal(mean, np.sqrt(1 / precision))
+                self._raw_traces['tau'][iteration_num - 1] * self._raw_traces['mu'][iteration_num - 1]) / precision
+        self._raw_traces['theta'][iteration_num] = np.random.normal(mean, np.sqrt(1 / precision))
 
     def _update_nu(self, iteration_num: int) -> None:
-        precision = (self.parameters['num_experiments'] * self.traces['tau'][iteration_num - 1]
+        precision = (self.parameters['num_experiments'] * self._raw_traces['tau'][iteration_num - 1]
                      + self.prior.epsilon)
 
-        mean = (self.parameters['num_experiments'] * self.traces['tau'][iteration_num - 1]
-                * np.mean(self.traces['theta'][iteration_num - 1, :])) / precision
+        mean = (self.parameters['num_experiments'] * self._raw_traces['tau'][iteration_num - 1]
+                * np.mean(self._raw_traces['theta'][iteration_num - 1, :])) / precision
 
-        self.traces['nu'][iteration_num] = np.random.normal(mean, np.sqrt(1 / precision))
+        self._raw_traces['mu'][iteration_num] = np.random.normal(mean, np.sqrt(1 / precision))
 
     def _update_tau(self, iteration_num: int) -> None:
         new_alpha = self.prior.alpha + self.parameters['num_experiments'] / 2
@@ -160,13 +165,32 @@ class GibbsSampler:
         new_beta = (
                 self.prior.beta +
                 np.sum(
-                    (self.traces['theta'][iteration_num - 1, :] - self.traces['nu'][iteration_num - 1]) ** 2
+                    (self._raw_traces['theta'][iteration_num - 1, :] - self._raw_traces['mu'][iteration_num - 1]) ** 2
                 ) / 2
         )
-        self.traces['tau'][iteration_num] = np.random.gamma(new_alpha, scale=1 / new_beta)
+        self._raw_traces['tau'][iteration_num] = np.random.gamma(new_alpha, scale=1 / new_beta)
 
     def run_model(self) -> None:
         for i in tqdm(range(1, self.simulation_settings['num_iterations'])):
             self._update_theta(i)
             self._update_nu(i)
             self._update_tau(i)
+
+    def get_posterior_samples(self) -> dict:
+        """
+        Although the traces can be helpful for the mathematically inclined, most users will want an easy-to-interpret
+        dictionary of posterior samples without greek variable names. This gives the posterior samples with
+        self-explanatory names and burns the initial self.simulation_settings['burn'] iterations.
+
+        Returns
+        -------
+        dict
+        A dictionary of posterior samples
+
+        """
+
+        return {
+            'meta_lift': self._raw_traces['mu'][self.simulation_settings['burn']:],
+            'lift_standard_deviation': self._raw_traces['tau'][self.simulation_settings['burn']:] ** -0.5,
+            'experiment_lifts': self._raw_traces['theta'][self.simulation_settings['burn']:, :]
+        }

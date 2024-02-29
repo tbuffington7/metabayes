@@ -108,14 +108,3 @@ Finally, we use the normal-gamma conjugate pair to update $\tau$:
 $$
 \tau | \mu, \theta\_{i} \sim Gamma(\alpha+\frac{k}{2}, \beta + \frac{\sum(\theta\_{i} - \mu)^2}{2})
 $$
-
-
-
-
-
-
-
-
-
-
-
